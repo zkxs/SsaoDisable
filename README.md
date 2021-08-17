@@ -4,7 +4,7 @@ A [NeosModLoader](https://github.com/zkxs/NeosModLoader) mod for [Neos VR](https
 
 This will no longer be needed once https://github.com/Neos-Metaverse/NeosPublic/issues/322 is resolved.
 
-Credit for this idea goes to [NeosWithoutSsao])https://github.com/hiinaspace/NeosWithoutSsao) v1.0.
+Credit for this idea goes to [NeosWithoutSsao](https://github.com/hiinaspace/NeosWithoutSsao) v1.0.
 
 ## Installation
 1. Install [NeosModLoader](https://github.com/zkxs/NeosModLoader).
