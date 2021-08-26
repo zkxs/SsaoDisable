@@ -11,7 +11,7 @@ namespace SsaoDisable
     {
         public override string Name => "SsaoDisable";
         public override string Author => "runtime";
-        public override string Version => "1.0.0";
+        public override string Version => "1.0.1";
         public override string Link => "https://github.com/zkxs/SsaoDisable";
 
         private static bool _first_trigger = false;
@@ -48,7 +48,7 @@ namespace SsaoDisable
             Msg($"disabled {count} prexisting SSAOs");
         }
 
-        private static void SetPostProcessingPostfix(Camera c, bool enabled, bool Ssao, bool screenspaceReflections)
+        private static void SetPostProcessingPostfix(Camera c, bool enabled, bool motionBlur, bool screenspaceReflections)
         {
             try
             {
