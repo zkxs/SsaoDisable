@@ -1,9 +1,9 @@
-﻿using HarmonyLib;
+﻿using AmplifyOcclusion;
+using HarmonyLib;
 using NeosModLoader;
 using System;
 using System.Reflection;
 using UnityEngine;
-using UnityEngine.Rendering.PostProcessing;
 
 namespace SsaoDisable
 {
@@ -11,10 +11,11 @@ namespace SsaoDisable
     {
         public override string Name => "SsaoDisable";
         public override string Author => "runtime";
-        public override string Version => "1.0.1";
+        public override string Version => "1.0.2";
         public override string Link => "https://github.com/zkxs/SsaoDisable";
 
         private static bool _first_trigger = false;
+        private static bool render_texture_safe = false;
 
         public override void OnEngineInit()
         {
@@ -27,18 +28,33 @@ namespace SsaoDisable
                 return;
             }
             MethodInfo replacementMethod = AccessTools.DeclaredMethod(typeof(SsaoDisable), nameof(SetPostProcessingPostfix));
+
+            MethodInfo buggedMethod = AccessTools.DeclaredMethod(typeof(AmplifyOcclusionCommon), nameof(AmplifyOcclusionCommon.SafeReleaseRT));
+            if (buggedMethod == null)
+            {
+                Error("Could not find AmplifyOcclusionCommon.SafeReleaseRT(ref RenderTexture)");
+                return;
+            }
+            MethodInfo buggedMethodPatch = AccessTools.DeclaredMethod(typeof(SsaoDisable), nameof(SsaoDisable.SafeReleaseRenderTextureBugfixPrefix));
+
             harmony.Patch(originalMethod, postfix: new HarmonyMethod(replacementMethod));
-            Msg("Hook installed successfully");
+            harmony.Patch(buggedMethod, prefix: new HarmonyMethod(buggedMethodPatch));
+
+            Msg("Hooks installed successfully");
 
             // disable prexisting SSAO by searching for all matching Unity components
-            AmplifyOcclusionEffect[] components = Resources.FindObjectsOfTypeAll<AmplifyOcclusionEffect>();
+            Camera[] cameras = Resources.FindObjectsOfTypeAll<Camera>();
             int count = 0;
-            foreach (AmplifyOcclusionEffect ssao in components)
+            foreach (Camera camera in cameras)
             {
                 try
                 {
-                    ssao.enabled = false;
-                    count += 1;
+                    var ssao = camera.GetComponent<AmplifyOcclusionEffect>();
+                    if (ssao != null && ssao.enabled)
+                    {
+                        ssao.enabled = false;
+                        count += 1;
+                    }
                 }
                 catch(Exception e)
                 {
@@ -46,6 +62,7 @@ namespace SsaoDisable
                 }
             }
             Msg($"disabled {count} prexisting SSAOs");
+            render_texture_safe = true;
         }
 
         private static void SetPostProcessingPostfix(Camera c, bool enabled, bool motionBlur, bool screenspaceReflections)
@@ -68,6 +85,27 @@ namespace SsaoDisable
             {
                 Warn($"failed to disable a new SSAO: {e}");
             }
+        }
+
+        private static bool SafeReleaseRenderTextureBugfixPrefix(ref RenderTexture rt)
+        {
+            if (rt == null)
+            {
+                return false;
+            }
+
+            // short circuiting is important here, as even thinking about looking at RenderTexture.active too early will crash unity
+            if (render_texture_safe && RenderTexture.active == rt)
+            {
+                // nulling this might be crashy, but it might be worse to not null it?
+                RenderTexture.active = null; 
+            }
+
+            rt.Release();
+            UnityEngine.Object.DestroyImmediate(rt);
+            rt = null;
+
+            return false;
         }
     }
 }
