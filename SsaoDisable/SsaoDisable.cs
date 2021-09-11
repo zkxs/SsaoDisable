@@ -1,7 +1,7 @@
-﻿using AmplifyOcclusion;
-using HarmonyLib;
+﻿using HarmonyLib;
 using NeosModLoader;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
@@ -15,7 +15,6 @@ namespace SsaoDisable
         public override string Link => "https://github.com/zkxs/SsaoDisable";
 
         private static bool _first_trigger = false;
-        private static bool render_texture_safe = false;
 
         public override void OnEngineInit()
         {
@@ -28,41 +27,14 @@ namespace SsaoDisable
                 return;
             }
             MethodInfo replacementMethod = AccessTools.DeclaredMethod(typeof(SsaoDisable), nameof(SetPostProcessingPostfix));
-
-            MethodInfo buggedMethod = AccessTools.DeclaredMethod(typeof(AmplifyOcclusionCommon), nameof(AmplifyOcclusionCommon.SafeReleaseRT));
-            if (buggedMethod == null)
-            {
-                Error("Could not find AmplifyOcclusionCommon.SafeReleaseRT(ref RenderTexture)");
-                return;
-            }
-            MethodInfo buggedMethodPatch = AccessTools.DeclaredMethod(typeof(SsaoDisable), nameof(SsaoDisable.SafeReleaseRenderTextureBugfixPrefix));
-
             harmony.Patch(originalMethod, postfix: new HarmonyMethod(replacementMethod));
-            harmony.Patch(buggedMethod, prefix: new HarmonyMethod(buggedMethodPatch));
+
+            // disable existing SSAO as soon as the engine is intialized
+            FieldInfo field = AccessTools.DeclaredField(typeof(FrooxEngine.Engine), "_postInitActions");
+            List<Action> postInitActions = (List<Action>)field.GetValue(FrooxEngine.Engine.Current);
+            postInitActions.Add(DisableExistingSsao);
 
             Msg("Hooks installed successfully");
-
-            // disable prexisting SSAO by searching for all matching Unity components
-            Camera[] cameras = Resources.FindObjectsOfTypeAll<Camera>();
-            int count = 0;
-            foreach (Camera camera in cameras)
-            {
-                try
-                {
-                    var ssao = camera.GetComponent<AmplifyOcclusionEffect>();
-                    if (ssao != null && ssao.enabled)
-                    {
-                        ssao.enabled = false;
-                        count += 1;
-                    }
-                }
-                catch(Exception e)
-                {
-                    Warn($"failed to disable a prexisting SSAO: {e}");
-                }
-            }
-            Msg($"disabled {count} prexisting SSAOs");
-            render_texture_safe = true;
         }
 
         private static void SetPostProcessingPostfix(Camera c, bool enabled, bool motionBlur, bool screenspaceReflections)
@@ -87,25 +59,28 @@ namespace SsaoDisable
             }
         }
 
-        private static bool SafeReleaseRenderTextureBugfixPrefix(ref RenderTexture rt)
+        private static void DisableExistingSsao()
         {
-            if (rt == null)
+            // disable prexisting SSAO by searching for all matching Unity components
+            Camera[] cameras = Resources.FindObjectsOfTypeAll<Camera>();
+            int count = 0;
+            foreach (Camera camera in cameras)
             {
-                return false;
+                try
+                {
+                    var ssao = camera.GetComponent<AmplifyOcclusionEffect>();
+                    if (ssao != null && ssao.enabled)
+                    {
+                        ssao.enabled = false;
+                        count += 1;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Warn($"failed to disable a prexisting SSAO: {e}");
+                }
             }
-
-            // short circuiting is important here, as even thinking about looking at RenderTexture.active too early will crash unity
-            if (render_texture_safe && RenderTexture.active == rt)
-            {
-                // nulling this might be crashy, but it might be worse to not null it?
-                RenderTexture.active = null; 
-            }
-
-            rt.Release();
-            UnityEngine.Object.DestroyImmediate(rt);
-            rt = null;
-
-            return false;
+            Msg($"disabled {count} prexisting SSAOs");
         }
     }
 }
