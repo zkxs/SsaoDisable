@@ -28,12 +28,6 @@ namespace SsaoDisable
             }
             MethodInfo replacementMethod = AccessTools.DeclaredMethod(typeof(SsaoDisable), nameof(SetPostProcessingPostfix));
             harmony.Patch(originalMethod, postfix: new HarmonyMethod(replacementMethod));
-
-            // disable existing SSAO as soon as the engine is intialized
-            FieldInfo field = AccessTools.DeclaredField(typeof(FrooxEngine.Engine), "_postInitActions");
-            List<Action> postInitActions = (List<Action>)field.GetValue(FrooxEngine.Engine.Current);
-            postInitActions.Add(DisableExistingSsao);
-
             Msg("Hooks installed successfully");
         }
 
@@ -50,6 +44,7 @@ namespace SsaoDisable
                     {
                         _first_trigger = true;
                         Msg("Hook triggered! Everything worked!");
+                        DisableExistingSsao(); // I have no idea why calling this here works but calling it earlier hard crashes unity
                     }
                 }
             }
